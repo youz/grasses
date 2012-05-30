@@ -33,35 +33,29 @@
 
 ;; parser
 (def parse-grass (src)
-  (withs (parse-apps (afn (str)
-                       (unless (is str "")
-                         (withs (f (or (pos #\w str) (err "syntax error"))
-                                 a (or (pos #\W (cut str f)) (- len.str f)))
-                           `((app ,(- f 1) ,(- a 1)) ,@(self:cut str (+ a f))))))
-          parse-abs (fn (str)
-                      (let arity (or (pos #\W str) len.str)
-                        `(abs ,arity ,(parse-apps (cut str arity))))))
-    (mappend [(if (is _.0 #\w) list:parse-abs parse-apps) _]
-             (tokens (keep [find _ "wWvV"] src) [find _ "vV"]))))
+  (let parse (afn (str)
+               (if (is str "")    nil
+                   (is str.0 #\w) `((abs ,(self:cut str 1)))
+                   (withs (f (or (pos #\w str) (err "syntax error"))
+                           a (or (pos #\W (cut str f)) (- len.str f)))
+                     `((app ,(- f 1) ,(- a 1)) ,@(self:cut str (+ a f))))))
+    (mappend parse (tokens (keep [find _ "wWvV"] src) [find _ "vV"]))))
 
 ;; interpreter
 (def eval-code (code env)
-  (let ((insn a b c) . rest) code
+  (let ((insn a b) . rest) code
     (case insn
-      abs (eval-code rest (cons (list 'abs a b env) env))
+      abs (eval-code rest (cons (list 'abs a env) env))
       app (with (fun env.a arg env.b)
             (if (isa fun 'int)
-                 (if (is fun arg)
-                     (rfn ctrue (x) (fn (y) x))
-                     (rfn cfalse (x) (fn (y) y)))
+                  (if (is fun arg)
+                      (rfn ctrue (x) (fn (y) x))
+                      (rfn cfalse (x) (fn (y) y)))
                 (isa fun 'fn)
-                 (eval-code rest (cons (fun arg) env))
+                  (eval-code rest (cons (fun arg) env))
                 (and acons.fun (is fun.0 'abs))
-                 (withs ((tag arity code dmp) fun
-                         v (if (is --.arity 0)
-                               (eval-code code (cons arg dmp))
-                               `(abs ,arity ,code (,arg ,@dmp))))
-                   (eval-code rest (cons v env)))
+                  (let (tag code dmp) fun
+                    (eval-code rest (cons (eval-code code (cons arg dmp)) env)))
                 (err "illegal state")))
       nil env.0
       (err "broken code"))))
@@ -72,42 +66,38 @@
                    (rfn grass-succ (c) (mod ++.c 256))
                    119
                    (rfn grass-read (a) (or (readb) a))))
-    (if (is 'abs (car:last code))
-        (eval-code (+ code '((app 0 0))) env)
-        (eval-code code env))))
+    (when (is 'abs (car:last code))
+      (++ code '((app 0 0))))
+    (evval-code code env)))
 
 
 ;; compiler
-(def abs->arc (abst env0)
-  (let (tag arity code) abst
-    (unless (is tag 'abs) (err "abs required, but got : " tag))
-    (if (> arity 0) (w/uniq arg
-                      `(fn (,arg) ,(abs->arc `(abs ,(- arity 1) ,code) (cons arg env0))))
-        (no code)   env0.0
-        ((rfn rec (code env)
-           (withs (((tag a b) . rest) code
-                   arg (uniq)
-                   body (case tag
-                          abs (abs->arc `(abs ,a ,b) env)
-                          app (list env.a env.b)
-                          (err "abs or app required, but got : " tag)))
+(def code->arc (code env)
+  (if no.code env.0
+      acons.code
+        (withs (((tag a b) . rest) code
+                body (case tag
+                       abs (w/uniq arg `(fn (,arg) ,(code->arc a (cons arg env))))
+                       app (list env.a env.b)
+                       (err "abs or app required, but got : " tag)))
              (if rest
-                 `((fn (,arg)
-                     ,(rec rest (cons arg env)))
-                   ,body)
-                 (is tag 'app) body
-                 `((fn (,arg) (,arg ,arg)) ,body))))
-         code env0))))
+                 (w/uniq arg
+                   `((fn (,arg) ,(code->arc rest (cons arg env)))
+                     ,body))
+                 body))
+      (err "proper list required, but got : " code)))
 
 (def grass->arc (src)
-  (write
-   `(withs (ctrue (fn (x) (fn (y) x))
-            cfalse (fn (x) (fn (y) y))
-            charfn  [fn ((o arg))
-                      (if no.arg _ (is _ (errsafe:arg)) ctrue cfalse)]
-            grass-succ  [charfn:mod (+ (_) 1) 256]
-            grass-write [do (pr:coerce (_) 'char) _]
-            w charfn.119
-            grass-read  [iflet n (readb) charfn.n _])
-      ,(abs->arc `(abs 0 ,(parse-grass src))
-                 '(grass-write grass-succ w grass-read)))))
+  (let code (parse-grass src)
+    (when (is 'abs (car:last code))
+      (++ code '((app 0 0))))
+    (write
+     `(withs (ctrue (fn (x) (fn (y) x))
+                    cfalse (fn (x) (fn (y) y))
+                    charfn  [fn ((o arg))
+                              (if no.arg _ (is _ (errsafe:arg)) ctrue cfalse)]
+                    grass-succ  [charfn:mod (+ (_) 1) 256]
+                    grass-write [do (pr:coerce (_) 'char) _]
+                    w charfn.119
+                    grass-read  [iflet n (readb) charfn.n _])
+        ,(code->arc code '(grass-write grass-succ w grass-read))))))
