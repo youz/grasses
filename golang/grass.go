@@ -56,18 +56,31 @@ type Value interface {
 }
 
 // Environment Type
-type Env []Value
-
-func (e *Env) cons(v Value) *Env {
-	d := append(*e, v)
-	return &d
+type Env struct {
+	first Value
+	next *Env
 }
 
-func (e *Env) nth(i int) Value {
-	if i >= len(*e) || i < 0 {
-		return nil
+func NewEnv(v Value, more ...Value) *Env {
+	e := &Env{v, nil}
+	for _, x := range more {
+		e = &Env{x, e}
 	}
-	return (*e)[len(*e)-i-1]
+	return e
+}
+
+func (e *Env) cons(v Value) *Env {
+	return &Env{v, e}
+}
+
+func (e *Env) nth(n int) Value {
+	for i := 0; i < n; i++ {
+		e = e.next
+		if e == nil {
+			return nil
+		}
+	}
+	return e.first
 }
 
 // Instruction Types
@@ -84,9 +97,7 @@ type Abs struct {
 }
 
 func (abs *Abs) Eval(e *Env) Value {
-	d := make(Env, len(*e))
-	copy(d, *e)
-	return &Fn{body: &abs.body, env: &d}
+	return &Fn{body: &abs.body, env: e}
 }
 
 func (abs *Abs) String() string {
@@ -271,8 +282,8 @@ func RunGrass(src []byte, r io.Reader, w io.Writer) {
 	if needapp {
 		code = append(code, &App{fun: 0, arg: 0})
 	}
-	e := Env{NewIn(r), CharFn(119), Succ, NewOut(w)}
-	EvalCode(&code, &e)
+	e := NewEnv(NewIn(r), CharFn(119), Succ, NewOut(w))
+	EvalCode(&code, e)
 }
 
 func readSource(path string) ([]byte, error) {

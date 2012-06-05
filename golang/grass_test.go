@@ -9,23 +9,14 @@ import (
 
 
 func TestEnv(t *testing.T) {
-	s := &Succ
-	e0 := &Env{CharFn('a')}
-	e := e0
+	e := NewEnv(CharFn(0))
 	for i := 1; i < 10; i++ {
-		e = e.cons(s.Apply(e.nth(0)))
+		e = e.cons(CharFn(i))
 	}
-	if len(*e0) != 1 {
-		t.Errorf("len(*e0) got %d; should be 1", len(*e0))
-	}
-	if len(*e) != 10 {
-		t.Errorf("len(*e) got %d; should be 10", len(*e))
-	}
-	for i := 0; i < len(*e); i++ {
+	for i := 0; i < 10; i++ {
 		a, _ := e.nth(i).GetValue()
-		b, _ := (*e)[len(*e)-i-1].GetValue()
-		if a != b {
-			t.Errorf("e.nth(%d).GetValue() got %d; should be %d", i, a, b)
+		if int(a) + i != 9 {
+			t.Errorf("e.nth(%d).GetValue() got %d; should be %d", i, a, 9 - i)
 		}
 	}
 }
@@ -56,9 +47,9 @@ func TestPrimitives(t *testing.T) {
 }
 
 func TestEvalCode(t *testing.T) {
-	c := Code{&App{fun: 2, arg: 1}, &App{fun: 0, arg:1}}
-	e := Env{ChurchTrue, CharFn(64), CharFn(65)}
-	v, _ := EvalCode(&c, &e).GetValue()
+	c := &Code{&App{fun: 2, arg: 1}, &App{fun: 0, arg:1}}
+	e := NewEnv(ChurchTrue, CharFn(64), CharFn(65))
+	v, _ := EvalCode(c, e).GetValue()
 	if v != 64 {
 		t.Errorf("expected 64; got %d", v)
 	}
