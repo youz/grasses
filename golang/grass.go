@@ -52,7 +52,7 @@ func die(fmtstr string, args ...interface{}) {
 // Grass Value interafce
 type Value interface {
 	Apply(Value) Value
-	GetValue() (byte, bool)
+	GetChar() (byte, bool)
 }
 
 // Environment Type
@@ -134,7 +134,7 @@ type Fn struct {
 	env  *Env
 }
 
-func (fn *Fn) GetValue() (byte, bool) {
+func (fn *Fn) GetChar() (byte, bool) {
 	return 0, false
 }
 
@@ -153,12 +153,12 @@ func EvalCode(c *Code, e0 *Env) Value {
 // Char
 type CharFn byte
 
-func (cf CharFn) GetValue() (byte, bool) {
+func (cf CharFn) GetChar() (byte, bool) {
 	return byte(cf), true
 }
 
 func (cf CharFn) Apply(arg Value) Value {
-	v, ok := arg.GetValue()
+	v, ok := arg.GetChar()
 	if ok && v == byte(cf) {
 		return ChurchTrue
 	}
@@ -168,7 +168,7 @@ func (cf CharFn) Apply(arg Value) Value {
 // Primitives
 type Primitive func(v Value) Value
 
-func (p Primitive) GetValue() (byte, bool) {
+func (p Primitive) GetChar() (byte, bool) {
 	return 0, false
 }
 
@@ -190,7 +190,7 @@ func NewIn(r io.Reader) Primitive {
 
 func NewOut(w io.Writer) Primitive {
 	return Primitive(func(v Value) Value {
-		c, ok := v.GetValue()
+		c, ok := v.GetChar()
 		if !ok {
 			die("Out Error: argument must be <CharFn>")
 		}
@@ -201,7 +201,7 @@ func NewOut(w io.Writer) Primitive {
 
 var (
 	Succ = Primitive(func(v Value) Value {
-		c, ok := v.GetValue()
+		c, ok := v.GetChar()
 		if !ok {
 			die("Succ Error: argument must be <CharFn>")
 		}

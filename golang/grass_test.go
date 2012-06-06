@@ -14,9 +14,9 @@ func TestEnv(t *testing.T) {
 		e = e.cons(CharFn(i))
 	}
 	for i := 0; i < 10; i++ {
-		a, _ := e.nth(i).GetValue()
+		a, _ := e.nth(i).GetChar()
 		if int(a) + i != 9 {
-			t.Errorf("e.nth(%d).GetValue() got %d; should be %d", i, a, 9 - i)
+			t.Errorf("e.nth(%d).GetChar() got %d; should be %d", i, a, 9 - i)
 		}
 	}
 }
@@ -49,7 +49,7 @@ func TestPrimitives(t *testing.T) {
 func TestEvalCode(t *testing.T) {
 	c := &Code{&App{fun: 2, arg: 1}, &App{fun: 0, arg:1}}
 	e := NewEnv(ChurchTrue, CharFn(64), CharFn(65))
-	v, _ := EvalCode(c, e).GetValue()
+	v, _ := EvalCode(c, e).GetChar()
 	if v != 64 {
 		t.Errorf("expected 64; got %d", v)
 	}
