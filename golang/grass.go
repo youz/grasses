@@ -226,7 +226,7 @@ var (
 	*/
 )
 
-func ParseGrass(src []byte) (Code, bool) {
+func ParseGrass(src []byte) Code {
 	filter := func(r rune) rune {
 		switch r {
 		case 'w', 'ｗ':
@@ -243,7 +243,6 @@ func ParseGrass(src []byte) (Code, bool) {
 	insts := bytes.Split(bytes.Map(filter, src), []byte{'v'})
 	tmp := make([]*Code, len(insts))
 	codelen := 0
-	var end_with_abs bool
 	for i, p := range insts {
 		if len(p) == 0 {
 			die("syntax error at section %d", i)
@@ -255,7 +254,6 @@ func ParseGrass(src []byte) (Code, bool) {
 		arity := m[3] - m[2]
 		apps := apppat.FindAllSubmatchIndex(p[arity:], -1)
 		body := make(Code, len(apps))
-		end_with_abs = (arity > 0)
 		for j, m := range apps {
 			body[j] = &App{fun: m[3] - m[2] - 1, arg: m[5] - m[4] - 1}
 		}
@@ -274,12 +272,12 @@ func ParseGrass(src []byte) (Code, bool) {
 			i++
 		}
 	}
-	return code, end_with_abs
+	return code
 }
 
 func RunGrass(src []byte, r io.Reader, w io.Writer) {
-	code, needapp := ParseGrass(src)
-	if needapp {
+	code := ParseGrass(src)
+	if _, isAbs := code[len(code)-1].(*Abs); isAbs {
 		code = append(code, &App{fun: 0, arg: 0})
 	}
 	e := NewEnv(NewIn(r), CharFn(119), Succ, NewOut(w))

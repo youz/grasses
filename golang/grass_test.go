@@ -57,11 +57,11 @@ func TestEvalCode(t *testing.T) {
 
 func TestParse(t *testing.T) {
 	src := []byte("wｖＷＷｗｗｗwhogeWWWwwwwwfuga")
-	parsed, needapp := ParseGrass(src)
+	parsed := ParseGrass(src)
 	dmp := fmt.Sprintf("%s", parsed)
 	ans := "[Abs[] App(1, 3) App(2, 4)]"
-	if needapp || dmp != ans {
-		t.Errorf("expected `%s`, false;\n got `%s`, %s", ans, dmp, needapp)
+	if dmp != ans {
+		t.Errorf("expected `%s`, false;\n got `%s`", ans, dmp)
 	}
 }
 
