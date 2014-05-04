@@ -86,7 +86,7 @@ class Env
   
   override {
     string toString () {
-      if (this.empty) return "env()";
+      if (this.empty) return "Env[]";
       
       string buf = "Env[" ~ _v.toString();
       auto d = _next;
