@@ -172,9 +172,6 @@ class F : V {
 
 F ctrue, cfalse, succ;
 
-void initBuiltins() {
-}
-
 class CharFn : V {
   private ubyte _char;
   this(ubyte n) { _char = n; }
