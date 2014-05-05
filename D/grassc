@@ -16,6 +16,6 @@ fi
 OUTPUTBIN=${1%.*}$BINEXT
 DSRCDIR=$(cd $(dirname $0); pwd)
 
-cp -f $1 $SRCDIR/source.grass
+cp -f $1 $DSRCDIR/source.grass
 dmd $DFLAG -J$DSRCDIR -of$OUTPUTBIN $DSRCDIR/grassctc.d
 
