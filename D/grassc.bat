@@ -6,18 +6,21 @@ if "x%1" == "x" (
 )
 
 setlocal
-set mixinfile=%~dp0source.grass
-set opt=-J%~dp0 -O
+set srcdir=%~dp0
+set dsrc=%srcdir%grassctc.d
+set grasssrc=%srcdir%source.grass
+
+set dflag=-J%srcdir% -O
 if "%1" == "-p" (
   set opt=%opt% -debug
   shift
 )
 set output=%~n1.exe
 
-if exist %mixinfile% del %mixinfile%
-copy %1 %mixinfile% >NUL
+if exist %grasssrc% del %grasssrc%
+copy /Y %1 %grasssrc% >NUL
 
 
-dmd %opt% -of%output% grassctc.d
+dmd %dflag% -of%output% %dsrc%
 
 endlocal
