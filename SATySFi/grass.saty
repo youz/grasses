@@ -1,0 +1,182 @@
+% grass.saty - Grass interpreter
+% https://github.com/youz/grasses
+%
+% Copyright (C) 2018 Yousuke Ushiki  <citrus.yubeshi@gmail.com>
+% All rights reserved.
+%
+% Grass language
+% http://www.blue.sky.or.jp/grass/
+%
+% Redistribution and use in source and binary forms, with or without
+% modification, are permitted provided that the following conditions
+% are met:
+% 1. Redistributions of source code must retain the above copyright
+%    notice, this list of conditions and the following disclaimer.
+% 2. Redistributions in binary form must reproduce the above copyright
+%    notice, this list of conditions and the following disclaimer in
+%    the documentation and/or other materials provided with the
+%    distribution.
+%
+% THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS''
+% AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+% THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+% PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS
+% BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+% CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+% SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+% BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+% WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+% OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+% IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+@require: stdja
+@require: List
+
+type insn =
+  | App of int * int
+  | Abs of insn list
+
+type value =
+  | Primitive of (value -> value) * string
+  | CharFn    of int
+  | Fn        of insn list * value list
+  | Error     of string
+
+let-rec string-join
+  | _ []          = ` `
+  | sep (x :: xs) = List.fold-left (fun a s -> a ^ sep ^ s) x xs
+
+let-rec i2s
+  | (App (m, n)) = `App(` ^ (arabic m) ^ `,` ^ (arabic n) ^ `)`
+  | (Abs code)   = `Abs(` ^ (string-join `,` (List.map i2s code)) ^ `)`
+
+let-rec v2s
+  | (Primitive (_, d)) = `Primitive(` ^ d ^ `)`
+  | (CharFn c)         = `Char(` ^ (arabic c) ^ `)`
+  | (Fn (code, env))   = `Fn([` ^ (string-join `,` (List.map i2s code)) ^ `], [`
+                                ^ (string-join `,` (List.map v2s env)) ^ `])`
+  | (Error msg)        = `Error(` ^ msg ^ `)`
+
+% let ctrue = Fn([Abs([App(3, 2)])], [Fn([], [])])
+% let cfalse = Fn([Abs([])], [])
+let ctrue = Primitive(fun x -> Primitive(fun y -> x, `x`), `true`)
+let cfalse = Primitive(fun x -> Primitive(fun y -> y, `y`), `false`)
+
+let-rec charcmp
+  | (CharFn c) (CharFn d) = if c == d then ctrue else cfalse
+  | _ _                   = cfalse
+
+let succ = Primitive(fun x -> (
+  match x with
+  | CharFn(c) -> CharFn((c + 1) mod 256)
+  | _         -> Error(`on succ: not a char (` ^ (v2s x) ^ `)`)
+  ), `Succ`)
+
+
+let-mutable stdout-buf <- []
+
+let write = Primitive(fun x -> (
+  match x with
+  | CharFn(c) -> let () = stdout-buf <- c :: !stdout-buf in x
+  | _         -> Error(`on write: not a char (` ^ (v2s x) ^ `)`)
+  ), `Write`)
+
+let-rec nth
+  | _ []        = Error(`out of bounds`)
+  | 0 (x :: xs) = x
+  | n (x :: xs) = nth (n - 1) xs
+
+let-rec eval
+  | []   (v :: r) = v
+  | (i :: r)  env = (
+    match i with
+    | Abs(c)    -> eval r (Fn(c, env) :: env)
+    | App(m, n) -> (
+      let f = nth (m - 1) env in
+      let x = nth (n - 1) env in
+      let v =
+        match f with
+        | Primitive(f,_) -> f x
+        | CharFn(c)      -> charcmp f x
+        | Fn(code, env)  -> eval code (x :: env)
+      in
+        match v with
+        | Error(_)  -> v
+        | _         -> eval r (v :: env)
+    ))
+  | _ _ = Error(`illegal state`)
+
+
+let findchar str chr start =
+  let l = string-length str in
+  let-rec f i =
+    if i == l then -1
+    else if string-same chr (string-sub str i 1) then i
+    else f (i + 1)
+  in
+  f start
+
+let split sep str =
+  List.map (fun (i, s) -> s) (split-on-regexp (regexp-of-string sep) str)
+
+let regexp-del pattern str =
+  string-join ` ` (split pattern str)
+
+let parse src =
+  let-rec makeabs
+    | 1     body = Abs(body)
+    | arity body = makeabs (arity - 1) [Abs(body)] in
+  let-rec parseapps
+    | ` ` = []
+    | s   =
+      let l = string-length s in
+      let m = findchar s `w` 0 in
+      let n = findchar s `W` m in
+      if n == -1 then [App(m, l - m)]
+      else App(m, n - m) :: parseapps (string-sub s n (l - n))
+  in
+  let parse1 s =
+    let a = findchar s `W` 0 in
+    if a == -1 then [makeabs (string-length s) []]
+    else if a == 0 then parseapps s
+    else [makeabs a (parseapps (string-sub s a ((string-length s) - a)))]
+  in
+  src |> regexp-del `[^WwVv]+`
+      |> regexp-del `^W+`
+      |> split `[Vv]+`
+      |> List.fold-left (fun acc s -> List.append acc (parse1 s)) []
+
+let get-stdout _ =
+  string-unexplode (List.reverse (!stdout-buf))
+
+let get-stderr v =
+  match v with
+  | Error(msg) -> msg
+  | _          -> ` `
+
+let run src =
+  let read = Primitive(fun x -> x, `Read(const eof)`) in
+  match parse src with
+  | []    -> (` `, `parse error`)
+  | code  -> (
+    let v = eval (List.append code [App(1,1)]) [write; succ; CharFn(119); read]
+    in
+      (get-stdout (), get-stderr v)
+    )
+
+let-block ctx +Grass src =
+  let (out, err) = run src in
+  let log str = display-message (`#` ^ str) in
+  let () = log (`stdout:` ^ out) in
+  let () = log (`error:` ^ err) in
+  form-paragraph ctx (read-inline ctx (embed-string out))
+
+in
+StdJa.document (|
+  title = {Grass interpreter in \SATySFi;};
+  author = {youz};
+  show-title = false;
+  show-toc = false;
+|) '<
+  +Grass(`wwWWWWwWwwwWwwwWwwwvwwWWwWWWwvWwWwvwWWWWWwWWWwWwwwvwvWwwwwwWwwwWWwWWWwWWWWWWWWwWWWWWWwwwwwwwwwwwwwwWWWWWWWWwWWWWWwWWWWWwwwWWWWWWwwwWWWWWWWWWwWWWWWWWWWWwwwWWWWWWWWWwWWWWWWWWWWwwwWWWWWWWWWWwwwwWWWWWWWWWWWWWwWWWWWWWWWWWWwwWWWWWWWWWWWWWWWwWWWWWWWWWWWWWWWwWWWWWWWWWWWWWWWWWWWWWWWWWWWwvwWWWWWWWWWWWWWWWWWWWWWWWWWWWWwvWwwwwwwWWwwwwwwwwwwWWWwwwwwwwwwwwwwWWWWwWWWWWwwwwwwwwwwwwwwwwwWWWWWWwwwwwwwwwwWWWWWWWwwwwwwwwwvwWWWWWWWWWwvWwwwwwwwwwwwwwwwwwwwwwwwwWWwwwwwwwwwwwwwwwwwwwwwwWWWwwwwwwwwwwwwwwwwwwwwwwwwWWWWwwwwwwwwWWWWWwwwwwwwwwwwwwwwwwwwwWWWWWWwwwwwwwwwwwwwww`);
+>
