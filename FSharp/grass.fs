@@ -92,51 +92,27 @@ let Input(istr: Stream) =
             pos <- pos + 1
             ret
 
-(* no-tco ver
+
 let rec Eval c e =
     match (c, e) with
     | ([], v :: r) -> v
     | (i :: r, e) ->
-      match i with
-      | Abs c -> Eval r (Fn(c, e) :: e)
-      | App(m, n) ->
-        let a = e.[n - 1]
-        let v = match e.[m - 1] with
-                | Prim f -> f a
-                | Fn(c, e) -> Eval c (a :: e)
-                | Ch x ->
-                    match a with
-                    | Ch y when x = y -> me <- ctrue :: me
-                    | _               -> me <- cfalse :: me
-        Eval r (v :: e)
-    | _ -> failwithf "illegal state"
-*)
-
-(* tco ver *)
-let rec Eval (c : Insn list) (e : Value list) =
-    let mutable mc = c
-    let mutable me = e
-    let mutable i = 0
-    while i < mc.Length do
-        match mc.[i] with
-        | Abs c -> me <- Fn(c, me) :: me
+        match i with
+        | Abs c -> Eval r (Fn(c, e) :: e)
         | App(m, n) ->
-            let a = me.[n - 1]
-            match me.[m - 1] with
-            | Prim f -> me <- f a :: me
+            let a = e.[n - 1]
+            match e.[m - 1] with
+            | Prim f -> Eval r (f a :: e)
             | Ch x ->
                 match a with
-                | Ch y when x = y -> me <- ctrue :: me
-                | _               -> me <- cfalse :: me
-            | Fn(c, e) ->
-                if i = mc.Length - 1 then
-                    i <- -1
-                    mc <- c
-                    me <- a :: e
-                else
-                    me <- (Eval c (a :: e)) :: me
-        i <- i + 1
-    me.[0]
+                | Ch y when x = y -> Eval r (ctrue :: e)
+                | _               -> Eval r (cfalse :: e)
+            | Fn(c', e') ->
+                match r with
+                | [] -> Eval c' (a :: e')
+                | r  -> Eval r ((Eval c' (a :: e')) :: e)
+    | _ -> failwithf "illegal state"
+
 
 let Parse (src : string) =
     let rec makeabs n body =
