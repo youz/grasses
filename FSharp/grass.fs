@@ -97,21 +97,22 @@ let rec Eval c e =
     match (c, e) with
     | ([], v :: r) -> v
     | (i :: r, e) ->
+        let next v = Eval r (v :: e)
         match i with
-        | Abs c -> Eval r (Fn(c, e) :: e)
+        | Abs c -> next (Fn(c, e))
         | App(m, n) ->
             let a = e.[n - 1]
             match e.[m - 1] with
-            | Prim f -> Eval r (f a :: e)
+            | Prim f -> next (f a)
             | Ch x ->
                 match a with
-                | Ch y when x = y -> Eval r (ctrue :: e)
-                | _               -> Eval r (cfalse :: e)
+                | Ch y when x = y -> next ctrue
+                | _               -> next cfalse
             | Fn(c', e') ->
                 match r with
                 | [] -> Eval c' (a :: e')
-                | r  -> Eval r ((Eval c' (a :: e')) :: e)
-    | _ -> failwithf "illegal state"
+                | r  -> next (Eval c' (a :: e'))
+    | _ -> failwith "illegal state"
 
 
 let Parse (src : string) =
